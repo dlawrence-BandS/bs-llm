@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>B&S AI & LLM Traffic</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://accounts.google.com/gsi/client"></script>
+<style>
+:root{
+  --navy:#1f332a; --navy-d:#15241d; --bg:#f4f1ea; --card:#fffdf8; --ink:#27231c; --mut:#8b8272;
+  --line:#e7e0d2; --brass:#a8814f; --brass-d:#8f6c3f;
+  --m-clicks:#a8814f; --m-impr:#3d5747; --m-ctr:#5b7085; --m-pos:#b45f42;
+  --up:#3e7048; --dn:#a13d2d; --up-bg:#eaf0e4; --dn-bg:#f8e9e2;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:13px}
+
+/* ── Header ─────────────────────────────── */
+header{background:var(--navy);color:#fff;padding:22px 30px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;border-bottom:3px solid var(--brass)}
+header h1{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:600;letter-spacing:.4px}
+header .sub{font-size:11px;opacity:.72;text-transform:uppercase;letter-spacing:1.6px;margin-top:2px}
+header .meta{margin-left:auto;display:flex;gap:16px;align-items:center;font-size:12px}
+header .meta .pill{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.14);padding:5px 13px;border-radius:20px;white-space:nowrap;letter-spacing:.3px}
+#key-btn{background:transparent;border:1px solid var(--brass);color:#e8d9c2;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;letter-spacing:.3px}
+#key-btn:hover{background:var(--brass);color:#fff}
+
+/* ── Controls ───────────────────────────── */
+.controls{background:#fff;border-bottom:1px solid var(--line);padding:12px 28px;display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;position:sticky;top:0;z-index:40}
+.ctl{display:flex;flex-direction:column;gap:4px}
+.ctl label{font-size:10.5px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.6px}
+.ctl select,.ctl input{border:1px solid #d4ccbb;border-radius:8px;padding:7px 10px;background:#fff;min-width:130px}
+.ctl input[type=date]{min-width:140px}
+#custom-dates{display:none;gap:14px}
+#custom-dates.show{display:flex}
+.chk{display:flex;align-items:center;gap:7px;padding-bottom:8px;font-size:13px;color:var(--ink)}
+.chk input{min-width:0}
+#run-btn{background:var(--brass);color:#fff;border:none;border-radius:8px;padding:9px 28px;font-weight:600;font-size:13.5px;letter-spacing:.4px}
+#run-btn:hover{background:var(--brass-d)}
+#run-btn:disabled{opacity:.55;cursor:wait}
+#status{font-size:12px;color:var(--mut);padding-bottom:9px;min-width:150px}
+#status.err{color:var(--dn);font-weight:600}
+
+/* ── Layout ─────────────────────────────── */
+main{max-width:1360px;margin:0 auto;padding:22px 28px 60px}
+.banner{background:#fff8e6;border:1px solid #f0dfa8;border-radius:10px;padding:14px 18px;margin-bottom:18px;font-size:13px;line-height:1.55;display:none}
+.banner.show{display:block}
+.banner.error{background:var(--dn-bg);border-color:#f0b9b6}
+
+/* KPI cards */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px;margin-bottom:16px}
+.kpi{background:var(--card);border-radius:12px;padding:16px 18px 14px;border:1px solid var(--line);border-top:4px solid var(--kc,#999);cursor:pointer;transition:box-shadow .15s, transform .15s;user-select:none}
+.kpi:hover{box-shadow:0 4px 14px rgba(20,35,70,.08)}
+.kpi.off{opacity:.45;border-top-color:#c8cdd8}
+.kpi .kl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--mut);display:flex;align-items:center;gap:6px}
+.kpi .kl .dot{width:9px;height:9px;border-radius:50%;background:var(--kc)}
+.kpi .kv{font-size:29px;font-weight:600;margin:6px 0 4px;font-variant-numeric:tabular-nums;letter-spacing:-.3px}
+.kpi .kd{font-size:12px;color:var(--mut)}
+.chg{display:inline-flex;align-items:center;gap:3px;font-weight:600;font-size:12px;padding:2px 8px;border-radius:12px;font-variant-numeric:tabular-nums}
+.chg.up{color:var(--up);background:var(--up-bg)}
+.chg.dn{color:var(--dn);background:var(--dn-bg)}
+.chg.fl{color:var(--mut);background:#eeeade}
+
+/* Cards & tabs */
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:16px}
+.card h3{font-family:'Cormorant Garamond',serif;font-size:19px;font-weight:600;margin-bottom:2px;letter-spacing:.2px}
+.card .hint{font-size:12px;color:var(--mut);margin-bottom:12px}
+.card-head{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.card-head .tools{margin-left:auto;display:flex;gap:8px;align-items:center}
+.tools input[type=search]{border:1px solid #d4ccbb;border-radius:8px;padding:6px 10px;width:210px}
+.csv-btn{background:#fff;border:1px solid #d4ccbb;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--navy)}
+.csv-btn:hover{background:#f2ede1}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:900px){.grid2{grid-template-columns:1fr}}
+
+nav.tabs{display:flex;gap:4px;border-bottom:2px solid var(--line);margin:6px 0 18px;flex-wrap:wrap}
+nav.tabs button{background:none;border:none;padding:10px 18px;font-size:13.5px;font-weight:600;color:var(--mut);border-bottom:3px solid transparent;margin-bottom:-2px}
+nav.tabs button.on{color:var(--navy);border-bottom-color:var(--brass)}
+.panel{display:none}
+.panel.on{display:block}
+
+/* Tables */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);text-align:right;padding:8px 10px;border-bottom:2px solid var(--line);white-space:nowrap;cursor:pointer;user-select:none}
+th.txt, td.txt{text-align:left}
+th.sorted{color:var(--navy)}
+td{padding:8px 10px;border-bottom:1px solid #f0f2f6;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.txt{white-space:normal;word-break:break-word;max-width:440px}
+tr:hover td{background:#faf7ef}
+td .qlink{color:var(--ink);text-decoration:none}
+td .qlink:hover{color:var(--m-clicks);text-decoration:underline}
+.posb{display:inline-block;min-width:44px;text-align:center;padding:2px 7px;border-radius:10px;font-weight:600;font-size:12px}
+.posb.p1{background:#e2f0e8;color:#0d7a3f}.posb.p2{background:#fdf3e3;color:#b06000}.posb.p3{background:#fdeae4;color:#c04b1d}.posb.p4{background:#eeeade;color:#6b7280}
+.mut{color:var(--mut)}
+.empty{padding:26px;text-align:center;color:var(--mut);font-size:13px}
+canvas{max-width:100%}
+.chart-h{position:relative;height:330px}
+.chart-s{position:relative;height:280px}
+
+/* Modal */
+.modal-bg{position:fixed;inset:0;background:rgba(15,25,50,.55);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
+.modal-bg.show{display:flex}
+.modal{background:#fff;border-radius:14px;max-width:640px;width:100%;padding:26px 28px}
+.modal h2{font-family:'Cormorant Garamond',serif;font-size:23px;font-weight:600;margin-bottom:8px}
+.modal p{font-size:13px;color:var(--mut);line-height:1.6;margin-bottom:12px}
+.modal textarea{width:100%;height:96px;border:1px solid #d4ccbb;border-radius:10px;padding:12px;font-family:ui-monospace,monospace;font-size:11.5px;resize:vertical}
+.modal input[type=file]{width:100%;border:1px dashed #aab4c8;border-radius:10px;padding:14px 12px;background:#faf7ef;font-size:12.5px;cursor:pointer}
+.modal input[type=file]::file-selector-button{background:var(--navy);color:#fff;border:none;border-radius:7px;padding:7px 14px;font-weight:600;font-size:12px;margin-right:12px;cursor:pointer}
+.modal input[type=file].ok{border-color:#0d7a3f;background:#f0f9f3}
+.modal .row{display:flex;gap:10px;margin-top:14px;align-items:center;flex-wrap:wrap}
+.modal .row .sp{margin-left:auto}
+.btn{border-radius:8px;padding:9px 20px;font-weight:600;font-size:13px;border:1px solid #d4ccbb;background:#fff}
+.btn.prime{background:var(--navy);color:#fff;border-color:var(--navy)}
+.btn.danger{color:var(--dn);border-color:#f0b9b6}
+#key-state{font-size:12px;color:var(--mut)}
+.modal .field{margin-top:14px}
+.modal .field label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);margin-bottom:5px}
+.modal .field input{width:100%;border:1px solid #d4ccbb;border-radius:8px;padding:8px 10px}
+
+footer{text-align:center;color:var(--mut);font-size:12px;padding:10px 0 30px}
+.mini-btn{background:#fff;border:1px solid #d4ccbb;border-radius:8px;padding:0 10px;font-size:13px;color:var(--navy)}
+.mini-btn:hover{background:#f2ede1}
+.qdrill{cursor:pointer;border-bottom:1px dashed #b9c4d8}
+.qdrill:hover{color:var(--m-clicks);border-bottom-color:var(--m-clicks)}
+a.ext{text-decoration:none;color:#9aa3b5;font-size:11px;margin-left:4px}
+a.ext:hover{color:var(--m-clicks)}
+
+/* Drill drawer */
+#drawer-bg{position:fixed;inset:0;background:rgba(15,25,50,.4);display:none;z-index:80}
+#drawer-bg.show{display:block}
+#drawer{position:fixed;top:0;right:-580px;width:560px;max-width:96vw;height:100vh;background:#fff;z-index:90;box-shadow:-8px 0 30px rgba(15,25,50,.2);transition:right .25s ease;display:flex;flex-direction:column}
+#drawer.show{right:0}
+.drawer-head{padding:18px 22px 14px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:12px}
+.drawer-head .dr-type{font-size:10.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--mut)}
+.drawer-head h2{font-size:16px;font-weight:700;word-break:break-word;margin-top:2px}
+.drawer-head button{margin-left:auto;background:none;border:none;font-size:17px;color:var(--mut);flex:none}
+.dr-body{padding:16px 22px;overflow-y:auto}
+.dr-links{font-size:12.5px;margin-bottom:12px}
+.dr-loading{padding:30px;text-align:center;color:var(--mut)}
+
+/* Ask AI */
+#ai-fab{position:fixed;bottom:22px;right:22px;z-index:70;background:var(--navy);color:#fff;border:1px solid var(--brass);border-radius:26px;padding:13px 22px;font-weight:600;font-size:13.5px;box-shadow:0 6px 18px rgba(35,30,20,.3)}
+#ai-fab:hover{background:var(--navy-d)}
+#ai-panel{position:fixed;bottom:22px;right:22px;width:420px;max-width:94vw;height:560px;max-height:80vh;background:#fff;border-radius:16px;box-shadow:0 12px 40px rgba(15,25,50,.3);z-index:75;display:none;flex-direction:column;overflow:hidden}
+#ai-panel.show{display:flex}
+.ai-head{background:var(--navy);color:#fff;padding:13px 16px;font-weight:600;font-size:13.5px;display:flex;align-items:center;gap:10px}
+.ai-head button{background:none;border:none;color:#fff;opacity:.8;font-size:12px}
+.ai-head button:hover{opacity:1}
+.ai-head .x{margin-left:auto;font-size:15px}
+.ai-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+.ai-msg{max-width:88%;padding:10px 13px;border-radius:13px;font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.ai-msg.user{align-self:flex-end;background:var(--navy);color:#fff;border-bottom-right-radius:4px}
+.ai-msg.bot{align-self:flex-start;background:#f2ede1;border-bottom-left-radius:4px}
+.ai-msg.think{align-self:flex-start;color:var(--mut);font-style:italic;padding:4px 13px}
+.ai-input{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line)}
+.ai-input textarea{flex:1;border:1px solid #d4ccbb;border-radius:10px;padding:9px 11px;resize:none;font-size:13px}
+.ai-input button{background:var(--navy);color:#fff;border:none;border-radius:10px;padding:0 18px;font-weight:600}
+.ai-input button:disabled{opacity:.5}
+</style>
+
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>AI &amp; LLM Traffic</h1>
+    <div class="sub">GA4 &middot; barkerandstonehouse.co.uk &middot; sessions referred by AI assistants</div>
+  </div>
+  <div class="meta">
+    <span class="pill" id="fresh-pill">Data to: &ndash;</span>
+    <span class="pill" id="share-pill">AI share: &ndash;</span>
+    <button id="key-btn">&#9881; Connection</button>
+  </div>
+</header>
+
+<div class="controls">
+  <div class="ctl">
+    <label>Date range</label>
+    <select id="preset">
+      <option value="7">Last 7 days</option>
+      <option value="28" selected>Last 28 days</option>
+      <option value="90">Last 3 months</option>
+      <option value="180">Last 6 months</option>
+      <option value="custom">Custom&hellip;</option>
+    </select>
+  </div>
+  <div id="custom-dates">
+    <div class="ctl"><label>From</label><input type="date" id="date-from"></div>
+    <div class="ctl"><label>To</label><input type="date" id="date-to"></div>
+  </div>
+  <div class="ctl">
+    <label>Compare</label>
+    <select id="cmp-sel">
+      <option value="prev" selected>vs previous period</option>
+      <option value="yoy">vs same period last year</option>
+      <option value="off">No comparison</option>
+    </select>
+  </div>
+  <button id="run-btn">Run</button>
+  <div id="status"></div>
+</div>
+
+<main>
+  <div class="banner" id="banner"></div>
+
+  <div class="kpis">
+    <div class="kpi" style="--kc:var(--m-clicks)"><div class="kl"><span class="dot"></span>AI sessions</div><div class="kv" id="kv-sess">&ndash;</div><div class="kd" id="kd-sess"></div></div>
+    <div class="kpi" style="--kc:var(--m-impr)"><div class="kl"><span class="dot"></span>Share of site</div><div class="kv" id="kv-share">&ndash;</div><div class="kd" id="kd-share"></div></div>
+    <div class="kpi" style="--kc:var(--m-ctr)"><div class="kl"><span class="dot"></span>Engagement rate</div><div class="kv" id="kv-eng">&ndash;</div><div class="kd" id="kd-eng"></div></div>
+    <div class="kpi" style="--kc:var(--m-pos)"><div class="kl"><span class="dot"></span>Transactions</div><div class="kv" id="kv-tx">&ndash;</div><div class="kd" id="kd-tx"></div></div>
+    <div class="kpi" style="--kc:var(--brass)"><div class="kl"><span class="dot"></span>Revenue</div><div class="kv" id="kv-rev">&ndash;</div><div class="kd" id="kd-rev"></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div><h3>AI sessions over time</h3><div class="hint">Daily sessions stacked by platform</div></div>
+    </div>
+    <div class="chart-h"><canvas id="ch-trend"></canvas></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Share of site traffic</h3>
+      <div class="hint">AI-referred sessions as % of all site sessions, daily</div>
+      <div class="chart-s"><canvas id="ch-share"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Platform mix</h3>
+      <div class="hint">Sessions by platform, current period</div>
+      <div class="chart-s"><canvas id="ch-mix"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div><h3>Platforms</h3><div class="hint">Session quality and revenue by AI platform</div></div>
+      <div class="tools"><button class="csv-btn" id="plat-csv">Export CSV</button></div>
+    </div>
+    <div class="tbl-wrap" id="tbl-platforms"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div><h3>Landing pages</h3><div class="hint">Where AI assistants send people &mdash; the pages they cite and link</div></div>
+      <div class="tools"><input type="search" id="lp-filter" placeholder="Filter pages&hellip;"><button class="csv-btn" id="lp-csv">Export CSV</button></div>
+    </div>
+    <div class="tbl-wrap" id="tbl-landing"></div>
+  </div>
+
+  <footer>Data: GA4 BigQuery export (<span id="ft-ds"></span>) &middot; export lags GA4 UI by up to 24h</footer>
+</main>
+
+<!-- Connection modal -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <h2>Connection &amp; settings</h2>
+    <p>This dashboard queries the GA4 BigQuery export directly with <strong>your Google account</strong> &mdash; no key files. Click Run and sign in when prompted.</p>
+    <div class="field">
+      <label>Signed-in status</label>
+      <div id="key-state" style="padding:6px 0"></div>
+    </div>
+    <div class="field">
+      <label>AI source regex (matched against session source)</label>
+      <input type="text" id="ai-regex-input">
+    </div>
+    <div class="row">
+      <span class="sp"></span>
+      <button class="btn danger" id="key-clear">Sign out</button>
+      <button class="btn" id="key-cancel">Cancel</button>
+      <button class="btn prime" id="key-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════ CONFIG ═══════ */
+const PROJECT = 'commanding-air-450109-p0';
+const DATASET = 'analytics_287404213';
+const EV = "`" + PROJECT + "." + DATASET + ".events_*`";
+const CLIENT_ID = '46227372300-rk63ag0caqgd7n12gjd0nt7f2qi7llqr.apps.googleusercontent.com';
+const DEFAULT_AI = 'chatgpt|chat\\.openai|openai\\.com|gemini\\.google|bard\\.google|perplexity|copilot\\.microsoft|edgeservices|claude\\.ai|anthropic|deepseek|grok\\.com|x\\.ai|meta\\.ai|chat\\.mistral|mistral\\.ai|phind|you\\.com|poe\\.com|kagi|andisearch|komo';
+const LS_AUTH = 'llm_google_auth', LS_AI = 'llm_ai_regex', LS_LOC = 'llm_bq_location';
+document.getElementById('ft-ds').textContent = PROJECT + '.' + DATASET;
+
+/* ═══════ STATE ═══════ */
+let accessToken = null, tokenExpiry = 0;
+let hasGrant = !!localStorage.getItem(LS_AUTH);
+let aiRe = localStorage.getItem(LS_AI) || DEFAULT_AI;
+let D = {};
+let charts = {};
+let lpFilter = '';
+
+/* ═══════ HELPERS ═══════ */
+const $ = id => document.getElementById(id);
+const fmt = n => n==null||isNaN(n) ? '\u2013' : Math.abs(n)>=1e6 ? (n/1e6).toFixed(2)+'M' : Math.abs(n)>=10000 ? (n/1e3).toFixed(1)+'k' : Math.round(n).toLocaleString('en-GB');
+const fmtF = n => n==null||isNaN(n) ? '\u2013' : Math.round(n).toLocaleString('en-GB');
+const gbp = n => n==null||isNaN(n) ? '\u2013' : '\u00a3' + (Math.abs(n)>=1e6 ? (n/1e6).toFixed(2)+'M' : Math.abs(n)>=10000 ? (n/1e3).toFixed(1)+'k' : Math.round(n).toLocaleString('en-GB'));
+const pct = n => n==null||isNaN(n) ? '\u2013' : (n*100).toFixed(n*100>=10?1:2)+'%';
+const esc = s => String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const iso = d => d.toISOString().slice(0,10);
+const ymd = s => s.replace(/-/g,'');
+const addDays = (d,n) => { const x = new Date(d); x.setUTCDate(x.getUTCDate()+n); return x; };
+
+function chip(cur, prev, opts={}){
+  const {invert=false, isPct=false} = opts;
+  if (prev==null || cur==null || isNaN(prev) || isNaN(cur) || !prev) return '<span class="chg fl">new</span>';
+  let diff, label;
+  if (isPct){ diff = (cur - prev)*100; label = (diff>0?'+':'') + diff.toFixed(1) + 'pp'; }
+  else { diff = (cur-prev)/prev; label = (diff>0?'+':'') + (diff*100).toFixed(1) + '%'; }
+  if (Math.abs(diff) < 0.0001) return '<span class="chg fl">0%</span>';
+  const good = invert ? diff < 0 : diff > 0;
+  return `<span class="chg ${good?'up':'dn'}">${good?'\u25b2':'\u25bc'} ${label}</span>`;
+}
+function dlCSV(name, header, rows){
+  const csv = [header, ...rows].map(r => r.map(v => { v = v==null?'':String(v); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\ufeff'+csv], {type:'text/csv'}));
+  a.download = name + '_' + iso(new Date()) + '.csv'; a.click();
+}
+function setStatus(msg, err=false){ const s=$('status'); s.textContent=msg; s.className = err?'err':''; }
+function showBanner(msg, isErr=false){ const b=$('banner'); b.innerHTML=msg; b.className='banner show'+(isErr?' error':''); }
+function hideBanner(){ $('banner').className='banner'; }
+function mkChart(id, cfg){ if (charts[id]) charts[id].destroy(); charts[id] = new Chart($(id), cfg); return charts[id]; }
+
+/* ═══════ AUTH (Google sign-in via GIS) ═══════ */
+let tokenClient = null, tokenPending = null;
+function initTokenClient(){
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: 'https://www.googleapis.com/auth/bigquery.readonly',
+    callback: resp => {
+      const p = tokenPending; tokenPending = null;
+      if (!p) return;
+      if (resp.error){ p.reject(new Error(resp.error_description || resp.error)); return; }
+      accessToken = resp.access_token;
+      tokenExpiry = Date.now() + (resp.expires_in ? resp.expires_in*1000 : 3600000);
+      hasGrant = true; localStorage.setItem(LS_AUTH, '1');
+      p.resolve(accessToken);
+    },
+    error_callback: err => {
+      const p = tokenPending; tokenPending = null;
+      if (p) p.reject(new Error(err.message || err.type || 'Sign-in cancelled'));
+    }
+  });
+}
+function requestToken(promptVal){
+  return new Promise((resolve, reject) => {
+    tokenPending = {resolve, reject};
+    tokenClient.requestAccessToken({prompt: promptVal});
+  });
+}
+async function getToken(){
+  if (accessToken && Date.now() < tokenExpiry - 60000) return accessToken;
+  if (typeof google === 'undefined' || !google.accounts) throw new Error('Google sign-in library failed to load \u2014 refresh the page');
+  if (!tokenClient) initTokenClient();
+  if (hasGrant){
+    try { return await requestToken(''); } catch(e){}
+  }
+  return await requestToken('consent');
+}
+function signOut(){
+  if (accessToken && typeof google !== 'undefined' && google.accounts){
+    try { google.accounts.oauth2.revoke(accessToken, ()=>{}); } catch(e){}
+  }
+  accessToken = null; tokenExpiry = 0; hasGrant = false;
+  localStorage.removeItem(LS_AUTH);
+}
+
+/* ═══════ QUERY RUNNER ═══════ */
+function parseVal(v, type){
+  if (v === null || v === undefined) return null;
+  if (type === 'INTEGER' || type === 'INT64') return parseInt(v, 10);
+  if (type === 'FLOAT' || type === 'FLOAT64' || type === 'NUMERIC' || type === 'BIGNUMERIC') return parseFloat(v);
+  if (type === 'BOOLEAN' || type === 'BOOL') return v === 'true' || v === true;
+  return v;
+}
+function parseRows(schema, rows){
+  const fields = schema.fields;
+  return (rows||[]).map(r => { const o = {}; fields.forEach((f,i) => o[f.name] = parseVal(r.f[i].v, f.type)); return o; });
+}
+async function runQuery(sql){
+  const token = await getToken();
+  const locations = [localStorage.getItem(LS_LOC), 'europe-west2', null, 'EU', 'US'].filter((v,i,a) => a.indexOf(v)===i);
+  let lastErr = null;
+  for (const loc of locations){
+    const body = {query: sql, useLegacySql:false, timeoutMs:90000, maxResults:10000};
+    if (loc) body.location = loc;
+    const resp = await fetch(`https://bigquery.googleapis.com/bigquery/v2/projects/${PROJECT}/queries`, {
+      method:'POST', headers:{'Authorization':'Bearer '+token, 'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const res = await resp.json();
+    if (res.error){
+      lastErr = new Error(res.error.message);
+      if (/not found|location|dataset/i.test(res.error.message)) continue;
+      throw lastErr;
+    }
+    if (loc) localStorage.setItem(LS_LOC, loc);
+    let out = res;
+    while (!out.jobComplete){
+      await new Promise(r => setTimeout(r, 1500));
+      const jr = await fetch(`https://bigquery.googleapis.com/bigquery/v2/projects/${PROJECT}/queries/${res.jobReference.jobId}?maxResults=10000${res.jobReference.location?'&location='+res.jobReference.location:''}`, {headers:{'Authorization':'Bearer '+token}});
+      out = await jr.json();
+      if (out.error) throw new Error(out.error.message);
+    }
+    let rows = parseRows(out.schema, out.rows);
+    let pageToken = out.pageToken;
+    while (pageToken){
+      const pr = await fetch(`https://bigquery.googleapis.com/bigquery/v2/projects/${PROJECT}/queries/${out.jobReference.jobId}?maxResults=10000&pageToken=${pageToken}${out.jobReference.location?'&location='+out.jobReference.location:''}`, {headers:{'Authorization':'Bearer '+token}});
+      const pd = await pr.json();
+      if (pd.error) throw new Error(pd.error.message);
+      rows = rows.concat(parseRows(out.schema, pd.rows));
+      pageToken = pd.pageToken;
+    }
+    return rows;
+  }
+  throw lastErr || new Error('Query failed');
+}
+
+/* ═══════ DATE RANGES ═══════ */
+function cmpMode(){ return $('cmp-sel').value; }
+function cmpOn(){ return cmpMode() !== 'off'; }
+function getRanges(){
+  const preset = $('preset').value;
+  const cap = addDays(new Date(), -1);   // GA4 export runs to yesterday
+  let ce, cs;
+  if (preset === 'custom'){
+    cs = new Date($('date-from').value + 'T00:00:00Z');
+    ce = new Date($('date-to').value + 'T00:00:00Z');
+    if (ce > cap) ce = cap;
+    if (cs > ce) cs = ce;
+  } else {
+    ce = cap;
+    cs = addDays(ce, -(parseInt(preset,10)-1));
+  }
+  const len = Math.round((ce - cs)/86400000) + 1;
+  let ps, pe;
+  if (cmpMode() === 'yoy'){ ps = addDays(cs, -364); pe = addDays(ce, -364); }
+  else { pe = addDays(cs, -1); ps = addDays(pe, -(len-1)); }
+  return {cs:iso(cs), ce:iso(ce), ps:iso(ps), pe:iso(pe), len};
+}
+
+/* ═══════ SQL ═══════ */
+function sessionCTE(r){
+  const safeAi = aiRe.replace(/'/g,'');
+  return `WITH ev AS (
+    SELECT event_date, event_timestamp, event_name, user_pseudo_id,
+      (SELECT value.int_value FROM UNNEST(event_params) WHERE key='ga_session_id') gsid,
+      (SELECT COALESCE(CAST(value.int_value AS STRING), value.string_value) FROM UNNEST(event_params) WHERE key='session_engaged') seng,
+      (SELECT value.string_value FROM UNNEST(event_params) WHERE key='page_location') ploc,
+      COALESCE(session_traffic_source_last_click.manual_campaign.source, collected_traffic_source.manual_source) src_raw,
+      ecommerce.purchase_revenue prev_
+    FROM ${EV}
+    WHERE _TABLE_SUFFIX BETWEEN '${ymd(r.ps)}' AND '${ymd(r.pe)}'
+       OR _TABLE_SUFFIX BETWEEN '${ymd(r.cs)}' AND '${ymd(r.ce)}'
+  ),
+  sess AS (
+    SELECT
+      CONCAT(user_pseudo_id,'-',CAST(gsid AS STRING)) sid,
+      MIN(PARSE_DATE('%Y%m%d', event_date)) d,
+      ARRAY_AGG(src_raw IGNORE NULLS ORDER BY event_timestamp LIMIT 1)[SAFE_OFFSET(0)] src,
+      ARRAY_AGG(ploc IGNORE NULLS ORDER BY event_timestamp LIMIT 1)[SAFE_OFFSET(0)] lp,
+      MAX(IF(seng='1',1,0)) engaged,
+      COUNTIF(event_name='purchase') tx,
+      SUM(IF(event_name='purchase', prev_, 0)) rev
+    FROM ev WHERE gsid IS NOT NULL
+    GROUP BY 1
+  ),
+  tagged AS (
+    SELECT *,
+      REGEXP_CONTAINS(LOWER(IFNULL(src,'')), r'${safeAi}') is_ai,
+      CASE
+        WHEN REGEXP_CONTAINS(LOWER(IFNULL(src,'')), r'chatgpt|chat\\.openai|openai') THEN 'ChatGPT'
+        WHEN REGEXP_CONTAINS(LOWER(IFNULL(src,'')), r'gemini\\.google|bard\\.google') THEN 'Gemini'
+        WHEN REGEXP_CONTAINS(LOWER(IFNULL(src,'')), r'perplexity') THEN 'Perplexity'
+        WHEN REGEXP_CONTAINS(LOWER(IFNULL(src,'')), r'copilot|edgeservices') THEN 'Copilot'
+        WHEN REGEXP_CONTAINS(LOWER(IFNULL(src,'')), r'claude|anthropic') THEN 'Claude'
+        WHEN REGEXP_CONTAINS(LOWER(IFNULL(src,'')), r'deepseek') THEN 'DeepSeek'
+        WHEN REGEXP_CONTAINS(LOWER(IFNULL(src,'')), r'grok|x\\.ai') THEN 'Grok'
+        WHEN REGEXP_CONTAINS(LOWER(IFNULL(src,'')), r'meta\\.ai') THEN 'Meta AI'
+        WHEN REGEXP_CONTAINS(LOWER(IFNULL(src,'')), r'mistral') THEN 'Mistral'
+        ELSE 'Other AI' END platform
+    FROM sess
+  )`;
+}
+function buildSQL(r){
+  const inCur = `d BETWEEN '${r.cs}' AND '${r.ce}'`;
+  const isCur = `d >= '${r.cs}'`;
+  const cte = sessionCTE(r);
+  return {
+    trend: `${cte}
+      SELECT CAST(d AS STRING) d, platform p,
+        COUNT(*) s, SUM(engaged) e, SUM(tx) t, SUM(rev) rv,
+        (SELECT COUNT(*) FROM tagged t2 WHERE t2.d = tagged.d) tot
+      FROM tagged WHERE is_ai GROUP BY 1,2 ORDER BY 1`,
+    totals: `${cte}
+      SELECT CAST(d AS STRING) d, COUNT(*) tot, COUNTIF(is_ai) ai
+      FROM tagged GROUP BY 1 ORDER BY 1`,
+    platforms: `${cte}
+      SELECT platform k,
+        COUNTIF(is_ai AND ${isCur}) cs_, SUM(IF(is_ai AND ${isCur}, engaged, 0)) ce_,
+        SUM(IF(is_ai AND ${isCur}, tx, 0)) ct, SUM(IF(is_ai AND ${isCur}, rev, 0)) cr,
+        COUNTIF(is_ai AND NOT ${isCur}) ps_,
+        SUM(IF(is_ai AND NOT ${isCur}, tx, 0)) pt, SUM(IF(is_ai AND NOT ${isCur}, rev, 0)) pr
+      FROM tagged WHERE is_ai GROUP BY 1 HAVING cs_ + ps_ > 0 ORDER BY cs_ DESC`,
+    landing: `${cte}
+      SELECT REGEXP_REPLACE(REGEXP_REPLACE(IFNULL(lp,'(unknown)'), r'^https?://[^/]+', ''), r'[?#].*$', '') k,
+        COUNTIF(${isCur}) cs_, SUM(IF(${isCur}, engaged, 0)) ce_,
+        SUM(IF(${isCur}, tx, 0)) ct, SUM(IF(${isCur}, rev, 0)) cr,
+        COUNTIF(NOT ${isCur}) ps_
+      FROM tagged WHERE is_ai GROUP BY 1 HAVING cs_ + ps_ > 0 ORDER BY cs_ DESC LIMIT 200`
+  };
+}
+
+/* ═══════ LOAD ═══════ */
+async function loadAll(){
+  if ($('run-btn').disabled) return;
+  hideBanner();
+  $('run-btn').disabled = true;
+  try {
+    const r = getRanges();
+    if (!r.cs || !r.ce || r.cs > r.ce){ setStatus('Check the custom date range', true); $('run-btn').disabled = false; return; }
+    const sql = buildSQL(r);
+    const keys = Object.keys(sql);
+    let done = 0;
+    setStatus(`Querying GA4 export\u2026 0/${keys.length}`);
+    const results = await Promise.all(keys.map(k =>
+      runQuery(sql[k]).then(rows => { setStatus(`Querying GA4 export\u2026 ${++done}/${keys.length}`); return [k, rows]; })
+    ));
+    D = Object.fromEntries(results);
+    D.ranges = r;
+    renderAll();
+    setStatus(`Loaded ${r.cs} \u2192 ${r.ce}` + (cmpOn() ? ` vs ${r.ps} \u2192 ${r.pe}` : ''));
+  } catch(e){
+    console.error(e);
+    setStatus('Query failed', true);
+    showBanner('<strong>Error:</strong> ' + esc(e.message) + '<br>If this mentions permissions, your Google account needs <em>BigQuery Data Viewer</em> plus <em>BigQuery Job User</em> on the project (\u2699 Connection \u2192 Sign out to switch account). If sign-in was cancelled, click Run to try again.', true);
+  }
+  $('run-btn').disabled = false;
+}
+
+/* ═══════ RENDER ═══════ */
+const PLAT_COLORS = {ChatGPT:'#a8814f', Gemini:'#3d5747', Perplexity:'#5b7085', Copilot:'#b45f42', Claude:'#8a693d', DeepSeek:'#6d5a6e', Grok:'#4a4a42', 'Meta AI':'#7d8c7c', Mistral:'#a4753a', 'Other AI':'#c9bfa8'};
+
+function splitTot(){
+  const r = D.ranges;
+  const cur = D.totals.filter(x=>x.d >= r.cs), prev = D.totals.filter(x=>x.d < r.cs);
+  return {cur, prev};
+}
+function renderAll(){
+  const r = D.ranges, cmp = cmpOn();
+  const {cur, prev} = splitTot();
+  const sum = (rows,f)=>rows.reduce((a,x)=>a+(x[f]||0),0);
+  const aiC = sum(cur,'ai'), aiP = sum(prev,'ai');
+  const totC = sum(cur,'tot'), totP = sum(prev,'tot');
+
+  const platC = D.platforms;
+  const engC = platC.reduce((a,x)=>a+(x.ce_||0),0);
+  const txC = platC.reduce((a,x)=>a+(x.ct||0),0), txP = platC.reduce((a,x)=>a+(x.pt||0),0);
+  const revC = platC.reduce((a,x)=>a+(x.cr||0),0), revP = platC.reduce((a,x)=>a+(x.pr||0),0);
+  const shareC = totC ? aiC/totC : null, shareP = totP ? aiP/totP : null;
+  const engRate = aiC ? engC/aiC : null;
+
+  const pl = cmpMode()==='yoy' ? 'last yr' : 'prev';
+  const set=(v,d,val,sub)=>{ $(v).innerHTML=val; $(d).innerHTML=sub; };
+  set('kv-sess','kd-sess', fmt(aiC), cmp ? chip(aiC,aiP)+` <span class="mut">${pl} ${fmt(aiP)}</span>` : '');
+  set('kv-share','kd-share', pct(shareC), cmp ? chip(shareC,shareP,{isPct:true})+` <span class="mut">${pl} ${pct(shareP)}</span>` : '');
+  set('kv-eng','kd-eng', pct(engRate), '');
+  set('kv-tx','kd-tx', fmtF(txC), cmp ? chip(txC,txP)+` <span class="mut">${pl} ${fmtF(txP)}</span>` : '');
+  set('kv-rev','kd-rev', gbp(revC), cmp ? chip(revC,revP)+` <span class="mut">${pl} ${gbp(revP)}</span>` : '');
+  $('share-pill').textContent = 'AI share: ' + pct(shareC);
+  $('fresh-pill').textContent = 'Data to: ' + r.ce;
+
+  renderTrend(r);
+  renderShare();
+  renderMix();
+  renderPlatforms(cmp);
+  renderLanding(cmp);
+}
+
+function renderTrend(r){
+  const rows = D.trend.filter(x=>x.d >= r.cs);
+  const days = [...new Set(rows.map(x=>x.d))].sort();
+  const plats = [...new Set(rows.map(x=>x.p))];
+  plats.sort((a,b)=> rows.filter(x=>x.p===b).reduce((s,x)=>s+x.s,0) - rows.filter(x=>x.p===a).reduce((s,x)=>s+x.s,0));
+  const ds = plats.map(p => ({label:p, data: days.map(d => rows.filter(x=>x.d===d&&x.p===p).reduce((s,x)=>s+x.s,0)),
+    backgroundColor:(PLAT_COLORS[p]||'#c9bfa8'), stack:'s', borderRadius:2}));
+  mkChart('ch-trend', {type:'bar', data:{labels:days.map(d=>d.slice(5)), datasets:ds},
+    options:{responsive:true, maintainAspectRatio:false, interaction:{mode:'index', intersect:false},
+      plugins:{legend:{position:'bottom', labels:{boxWidth:12, font:{size:11}}}},
+      scales:{x:{stacked:true, grid:{display:false}, ticks:{maxTicksLimit:14, color:'#98907d', font:{size:11}}},
+              y:{stacked:true, beginAtZero:true, ticks:{callback:v=>fmt(v), color:'#98907d', font:{size:11}}, grid:{color:'#ece7da'}}}}});
+}
+function renderShare(){
+  const {cur} = splitTot();
+  mkChart('ch-share', {type:'line', data:{labels:cur.map(x=>x.d.slice(5)), datasets:[
+    {label:'AI share', data:cur.map(x=>x.tot?x.ai/x.tot:null), borderColor:'#a8814f', backgroundColor:'#a8814f22',
+     fill:true, borderWidth:2, pointRadius:0, tension:.3}]},
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:c=>'AI share: '+pct(c.parsed.y)}}},
+      scales:{x:{grid:{display:false}, ticks:{maxTicksLimit:10, color:'#98907d', font:{size:11}}},
+              y:{beginAtZero:true, ticks:{callback:v=>pct(v), color:'#98907d', font:{size:11}}, grid:{color:'#ece7da'}}}}});
+}
+function renderMix(){
+  const rows = D.platforms.filter(x=>x.cs_>0);
+  mkChart('ch-mix', {type:'doughnut', data:{labels:rows.map(x=>x.k),
+    datasets:[{data:rows.map(x=>x.cs_), backgroundColor:rows.map(x=>PLAT_COLORS[x.k]||'#c9bfa8'), borderWidth:2, borderColor:'#fffdf8'}]},
+    options:{responsive:true, maintainAspectRatio:false, cutout:'58%',
+      plugins:{legend:{position:'right', labels:{boxWidth:12, font:{size:11}}},
+        tooltip:{callbacks:{label:c=>{const t=rows.reduce((a,x)=>a+x.cs_,0); return ` ${c.label}: ${fmtF(c.raw)} (${t?(c.raw/t*100).toFixed(1):'0'}%)`;}}}}}});
+}
+function renderPlatforms(cmp){
+  const rows = D.platforms;
+  $('tbl-platforms').innerHTML = `<table><thead><tr><th class="txt">Platform</th><th>Sessions</th>${cmp?'<th>\u0394</th>':''}<th>Engagement</th><th>Transactions</th><th>Revenue</th><th>Rev / session</th></tr></thead><tbody>` +
+    rows.map(x=>`<tr><td class="txt">${esc(x.k)}</td><td>${fmtF(x.cs_)}</td>${cmp?`<td>${chip(x.cs_,x.ps_)}</td>`:''}<td>${pct(x.cs_?x.ce_/x.cs_:null)}</td><td>${fmtF(x.ct)}</td><td>${gbp(x.cr)}</td><td>${gbp(x.cs_?x.cr/x.cs_:null)}</td></tr>`).join('') +
+    '</tbody></table>' || '<div class="empty">No AI sessions found</div>';
+}
+function renderLanding(cmp){
+  const f = lpFilter.toLowerCase();
+  const rows = (D.landing||[]).filter(x=>!f || String(x.k??'').toLowerCase().includes(f)).slice(0,100);
+  $('tbl-landing').innerHTML = rows.length ? `<table><thead><tr><th class="txt">Landing page</th><th>Sessions</th>${cmp?'<th>\u0394</th>':''}<th>Engagement</th><th>Transactions</th><th>Revenue</th></tr></thead><tbody>` +
+    rows.map(x=>`<tr><td class="txt"><a class="qlink" href="https://www.barkerandstonehouse.co.uk${esc(x.k)}" target="_blank" rel="noopener">${esc(x.k)}</a></td><td>${fmtF(x.cs_)}</td>${cmp?`<td>${chip(x.cs_,x.ps_)}</td>`:''}<td>${pct(x.cs_?x.ce_/x.cs_:null)}</td><td>${fmtF(x.ct)}</td><td>${gbp(x.cr)}</td></tr>`).join('') +
+    '</tbody></table>' : '<div class="empty">No pages match</div>';
+}
+
+/* ═══════ EVENTS ═══════ */
+$('preset').addEventListener('change', () => $('custom-dates').classList.toggle('show', $('preset').value==='custom'));
+$('run-btn').addEventListener('click', loadAll);
+$('cmp-sel').addEventListener('change', () => { if (D.totals) loadAll(); });
+$('lp-filter').addEventListener('input', e => { lpFilter = e.target.value; if (D.landing) renderLanding(cmpOn()); });
+$('plat-csv').addEventListener('click', () => dlCSV('llm_platforms', ['platform','sessions','prev_sessions','engaged','transactions','revenue'],
+  (D.platforms||[]).map(x=>[x.k,x.cs_,x.ps_,x.ce_,x.ct,x.cr])));
+$('lp-csv').addEventListener('click', () => dlCSV('llm_landing_pages', ['page','sessions','prev_sessions','engaged','transactions','revenue'],
+  (D.landing||[]).map(x=>[x.k,x.cs_,x.ps_,x.ce_,x.ct,x.cr])));
+
+function openModal(){
+  $('ai-regex-input').value = aiRe;
+  $('key-state').textContent = hasGrant ? 'Signed in with Google \u2014 token refreshes automatically' : 'Not signed in \u2014 click Run and a Google sign-in window will appear';
+  $('modal-bg').classList.add('show');
+}
+$('key-btn').addEventListener('click', openModal);
+$('key-cancel').addEventListener('click', () => $('modal-bg').classList.remove('show'));
+$('modal-bg').addEventListener('click', e => { if (e.target === $('modal-bg')) $('modal-bg').classList.remove('show'); });
+$('key-clear').addEventListener('click', () => { signOut(); $('key-state').textContent = 'Signed out'; });
+$('key-save').addEventListener('click', () => {
+  aiRe = $('ai-regex-input').value.trim() || DEFAULT_AI;
+  localStorage.setItem(LS_AI, aiRe);
+  $('modal-bg').classList.remove('show');
+  if (hasGrant) loadAll();
+});
+
+/* ═══════ INIT ═══════ */
+(function init(){
+  const end = addDays(new Date(), -1);
+  $('date-to').value = iso(end);
+  $('date-from').value = iso(addDays(end, -27));
+  if (hasGrant) loadAll();
+  else showBanner('First run: click <strong>Run</strong> and sign in with your Google account when prompted. No key files needed \u2014 access uses your own BigQuery permissions.');
+})();
+</script>
+</body>
+</html>
