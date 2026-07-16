@@ -349,6 +349,7 @@ function initTokenClient(){
     }
   });
 }
+let tokenInFlight = null;   // Promise if a token request is already running
 function requestToken(promptVal){
   return new Promise((resolve, reject) => {
     tokenPending = {resolve, reject};
@@ -359,10 +360,19 @@ async function getToken(){
   if (accessToken && Date.now() < tokenExpiry - 60000) return accessToken;
   if (typeof google === 'undefined' || !google.accounts) throw new Error('Google sign-in library failed to load \u2014 refresh the page');
   if (!tokenClient) initTokenClient();
-  if (hasGrant){
-    try { return await requestToken(''); } catch(e){}
-  }
-  return await requestToken('consent');
+  // Coalesce concurrent callers onto a single token request
+  if (tokenInFlight) return tokenInFlight;
+  tokenInFlight = (async () => {
+    try {
+      if (hasGrant){
+        try { return await requestToken(''); } catch(e){}
+      }
+      return await requestToken('consent');
+    } finally {
+      tokenInFlight = null;
+    }
+  })();
+  return tokenInFlight;
 }
 function signOut(){
   if (accessToken && typeof google !== 'undefined' && google.accounts){
