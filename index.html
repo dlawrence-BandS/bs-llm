@@ -535,8 +535,16 @@ function buildSQL(r){
         (SELECT COUNT(*) FROM tagged t2 WHERE t2.d = tagged.d) tot
       FROM tagged WHERE is_ai GROUP BY 1,2 ORDER BY 1`,
     totals: `${cte}
-      SELECT CAST(t.d AS STRING) d, t.tot tot, IFNULL(a.ai,0) ai FROM ai_totals t
-      LEFT JOIN (SELECT d, COUNT(*) ai FROM tagged GROUP BY d) a USING (d) ORDER BY 1`,
+      SELECT CAST(t.d AS STRING) d, t.tot tot, IFNULL(a.ai, 0) ai
+      FROM ai_totals t
+      LEFT JOIN (
+        SELECT sess.d AS d, COUNT(*) AS ai
+        FROM sess
+        INNER JOIN tagged ON tagged.sid = sess.sid
+        GROUP BY sess.d
+      ) a
+      ON t.d = a.d
+      ORDER BY t.d`,
     platforms: `${cte}
       SELECT platform k,
         COUNTIF(is_ai AND ${isCur}) cs_, SUM(IF(is_ai AND ${isCur}, engaged, 0)) ce_,
