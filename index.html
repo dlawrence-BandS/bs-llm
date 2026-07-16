@@ -386,17 +386,22 @@ function parseRows(schema, rows){
 }
 async function runQuery(sql){
   const token = await getToken();
-  const locations = [localStorage.getItem(LS_LOC), 'europe-west2', null, 'EU', 'US'].filter((v,i,a) => a.indexOf(v)===i);
+  // GA4 exports typically land in US; try that first, then fall back
+  const locations = [localStorage.getItem(LS_LOC), 'US', 'EU', 'europe-west2', null].filter((v,i,a) => v!==undefined && a.indexOf(v)===i);
   let lastErr = null;
   for (const loc of locations){
     const body = {query: sql, useLegacySql:false, timeoutMs:90000, maxResults:10000};
     if (loc) body.location = loc;
-    const resp = await fetch(`https://bigquery.googleapis.com/bigquery/v2/projects/${PROJECT}/queries`, {
-      method:'POST', headers:{'Authorization':'Bearer '+token, 'Content-Type':'application/json'}, body:JSON.stringify(body)});
-    const res = await resp.json();
+    let resp, res;
+    try {
+      resp = await fetch(`https://bigquery.googleapis.com/bigquery/v2/projects/${PROJECT}/queries`, {
+        method:'POST', headers:{'Authorization':'Bearer '+token, 'Content-Type':'application/json'}, body:JSON.stringify(body)});
+      res = await resp.json();
+    } catch(err){ lastErr = err; continue; }
     if (res.error){
       lastErr = new Error(res.error.message);
-      if (/not found|location|dataset/i.test(res.error.message)) continue;
+      console.warn('BQ error @'+loc+':', res.error.message);
+      if (/not found|location|dataset|Not found:|was not found/i.test(res.error.message)) continue;
       throw lastErr;
     }
     if (loc) localStorage.setItem(LS_LOC, loc);
@@ -418,7 +423,7 @@ async function runQuery(sql){
     }
     return rows;
   }
-  throw lastErr || new Error('Query failed');
+  throw lastErr || new Error('Query failed in all regions');
 }
 
 /* ═══════ DATE RANGES ═══════ */
@@ -679,6 +684,8 @@ $('key-save').addEventListener('click', () => {
   const end = addDays(new Date(), -1);
   $('date-to').value = iso(end);
   $('date-from').value = iso(addDays(end, -27));
+  // Clear any stale region cache from previous attempts (GA4 export is US-region)
+  if (localStorage.getItem(LS_LOC) === 'europe-west2') localStorage.removeItem(LS_LOC);
   if (hasGrant) showBanner('Click <strong>Run</strong> to fetch the latest AI traffic data.');
   else showBanner('First run: click <strong>Run</strong> and sign in with your Google account when prompted. No key files needed \u2014 access uses your own BigQuery permissions.');
 })();
