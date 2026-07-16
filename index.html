@@ -447,7 +447,8 @@ function getRanges(){
 /* ═══════ SQL ═══════ */
 function sessionCTE(r){
   const safeAi = aiRe.replace(/'/g,'');
-  return `WITH ev AS (
+  // Two-pass: identify AI sessions first (cheap scan of source strings), then rebuild only those sessions.
+  return `WITH raw AS (
     SELECT event_date, event_timestamp, event_name, user_pseudo_id,
       (SELECT value.int_value FROM UNNEST(event_params) WHERE key='ga_session_id') gsid,
       (SELECT COALESCE(CAST(value.int_value AS STRING), value.string_value) FROM UNNEST(event_params) WHERE key='session_engaged') seng,
@@ -455,24 +456,39 @@ function sessionCTE(r){
       COALESCE(session_traffic_source_last_click.manual_campaign.source, collected_traffic_source.manual_source) src_raw,
       ecommerce.purchase_revenue prev_
     FROM ${EV}
-    WHERE _TABLE_SUFFIX BETWEEN '${ymd(r.ps)}' AND '${ymd(r.pe)}'
-       OR _TABLE_SUFFIX BETWEEN '${ymd(r.cs)}' AND '${ymd(r.ce)}'
+    WHERE (_TABLE_SUFFIX BETWEEN '${ymd(r.ps)}' AND '${ymd(r.pe)}'
+        OR _TABLE_SUFFIX BETWEEN '${ymd(r.cs)}' AND '${ymd(r.ce)}')
+  ),
+  ai_sess AS (
+    SELECT user_pseudo_id, (SELECT value.int_value FROM UNNEST(event_params) WHERE key='ga_session_id') gsid
+    FROM ${EV}
+    WHERE (_TABLE_SUFFIX BETWEEN '${ymd(r.ps)}' AND '${ymd(r.pe)}'
+        OR _TABLE_SUFFIX BETWEEN '${ymd(r.cs)}' AND '${ymd(r.ce)}')
+      AND REGEXP_CONTAINS(LOWER(IFNULL(COALESCE(session_traffic_source_last_click.manual_campaign.source, collected_traffic_source.manual_source),'')), r'${safeAi}')
+    GROUP BY 1,2
+  ),
+  ai_totals AS (
+    SELECT PARSE_DATE('%Y%m%d', event_date) d, COUNT(DISTINCT CONCAT(user_pseudo_id,'-',CAST((SELECT value.int_value FROM UNNEST(event_params) WHERE key='ga_session_id') AS STRING))) tot
+    FROM ${EV}
+    WHERE (_TABLE_SUFFIX BETWEEN '${ymd(r.ps)}' AND '${ymd(r.pe)}'
+        OR _TABLE_SUFFIX BETWEEN '${ymd(r.cs)}' AND '${ymd(r.ce)}')
+    GROUP BY 1
   ),
   sess AS (
     SELECT
-      CONCAT(user_pseudo_id,'-',CAST(gsid AS STRING)) sid,
-      MIN(PARSE_DATE('%Y%m%d', event_date)) d,
-      ARRAY_AGG(src_raw IGNORE NULLS ORDER BY event_timestamp LIMIT 1)[SAFE_OFFSET(0)] src,
-      ARRAY_AGG(ploc IGNORE NULLS ORDER BY event_timestamp LIMIT 1)[SAFE_OFFSET(0)] lp,
-      MAX(IF(seng='1',1,0)) engaged,
-      COUNTIF(event_name='purchase') tx,
-      SUM(IF(event_name='purchase', prev_, 0)) rev
-    FROM ev WHERE gsid IS NOT NULL
+      CONCAT(raw.user_pseudo_id,'-',CAST(raw.gsid AS STRING)) sid,
+      MIN(PARSE_DATE('%Y%m%d', raw.event_date)) d,
+      ARRAY_AGG(raw.src_raw IGNORE NULLS ORDER BY raw.event_timestamp LIMIT 1)[SAFE_OFFSET(0)] src,
+      ARRAY_AGG(raw.ploc IGNORE NULLS ORDER BY raw.event_timestamp LIMIT 1)[SAFE_OFFSET(0)] lp,
+      MAX(IF(raw.seng='1',1,0)) engaged,
+      COUNTIF(raw.event_name='purchase') tx,
+      SUM(IF(raw.event_name='purchase', raw.prev_, 0)) rev
+    FROM raw INNER JOIN ai_sess USING (user_pseudo_id, gsid)
+    WHERE raw.gsid IS NOT NULL
     GROUP BY 1
   ),
   tagged AS (
-    SELECT *,
-      REGEXP_CONTAINS(LOWER(IFNULL(src,'')), r'${safeAi}') is_ai,
+    SELECT *, TRUE is_ai,
       CASE
         WHEN REGEXP_CONTAINS(LOWER(IFNULL(src,'')), r'chatgpt|chat\\.openai|openai') THEN 'ChatGPT'
         WHEN REGEXP_CONTAINS(LOWER(IFNULL(src,'')), r'gemini\\.google|bard\\.google') THEN 'Gemini'
@@ -498,8 +514,8 @@ function buildSQL(r){
         (SELECT COUNT(*) FROM tagged t2 WHERE t2.d = tagged.d) tot
       FROM tagged WHERE is_ai GROUP BY 1,2 ORDER BY 1`,
     totals: `${cte}
-      SELECT CAST(d AS STRING) d, COUNT(*) tot, COUNTIF(is_ai) ai
-      FROM tagged GROUP BY 1 ORDER BY 1`,
+      SELECT CAST(t.d AS STRING) d, t.tot tot, IFNULL(a.ai,0) ai FROM ai_totals t
+      LEFT JOIN (SELECT d, COUNT(*) ai FROM tagged GROUP BY d) a USING (d) ORDER BY 1`,
     platforms: `${cte}
       SELECT platform k,
         COUNTIF(is_ai AND ${isCur}) cs_, SUM(IF(is_ai AND ${isCur}, engaged, 0)) ce_,
