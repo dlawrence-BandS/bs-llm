@@ -531,8 +531,7 @@ function buildSQL(r){
   return {
     trend: `${cte}
       SELECT CAST(d AS STRING) d, platform p,
-        COUNT(*) s, SUM(engaged) e, SUM(tx) t, SUM(rev) rv,
-        (SELECT COUNT(*) FROM tagged t2 WHERE t2.d = tagged.d) tot
+        COUNT(*) s, SUM(engaged) e, SUM(tx) t, SUM(rev) rv
       FROM tagged WHERE is_ai GROUP BY 1,2 ORDER BY 1`,
     totals: `${cte}
       SELECT CAST(t.d AS STRING) d, t.tot tot, IFNULL(a.ai, 0) ai
