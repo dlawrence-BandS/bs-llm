@@ -554,7 +554,12 @@ async function loadAll(){
   } catch(e){
     console.error(e);
     setStatus('Query failed', true);
-    showBanner('<strong>Error:</strong> ' + esc(e.message) + '<br>If this mentions permissions, your Google account needs <em>BigQuery Data Viewer</em> plus <em>BigQuery Job User</em> on the project (\u2699 Connection \u2192 Sign out to switch account). If sign-in was cancelled, click Run to try again.', true);
+    const msg = String(e.message||e);
+    if (/popup|blocked/i.test(msg)){
+      showBanner('<strong>Sign-in popup was blocked.</strong> Allow popups for <code>dlawrence-bands.github.io</code> in your browser (click the popup-blocked icon in the address bar, or Site settings \u2192 Popups \u2192 Allow), then click Run again.', true);
+    } else {
+      showBanner('<strong>Error:</strong> ' + esc(msg) + '<br>If this mentions permissions, your Google account needs <em>BigQuery Data Viewer</em> plus <em>BigQuery Job User</em> on the project (\u2699 Connection \u2192 Sign out to switch account). If sign-in was cancelled, click Run to try again.', true);
+    }
   }
   $('run-btn').disabled = false;
 }
@@ -674,7 +679,7 @@ $('key-save').addEventListener('click', () => {
   const end = addDays(new Date(), -1);
   $('date-to').value = iso(end);
   $('date-from').value = iso(addDays(end, -27));
-  if (hasGrant) loadAll();
+  if (hasGrant) showBanner('Click <strong>Run</strong> to fetch the latest AI traffic data.');
   else showBanner('First run: click <strong>Run</strong> and sign in with your Google account when prompted. No key files needed \u2014 access uses your own BigQuery permissions.');
 })();
 </script>
